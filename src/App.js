@@ -400,7 +400,7 @@ export default function App() {
             gaps={
               dashboardMode === "propulsion"
                 ? [-0.1, -0.1, -0.1, -0.1]
-                : Object.values(sensorData.levGaps).map(function(x) {return x*0.01})
+                : Object.values(sensorData.levGaps).map(function(x) {return (x*0.01)-0.1})
             }
           />    
         </Suspense>

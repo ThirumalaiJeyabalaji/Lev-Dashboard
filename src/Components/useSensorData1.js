@@ -50,7 +50,7 @@ export function useSensorDataWithTracking() {
     acceleration: 0,
     distance: 0,
     runtime: 0,
-    podStatus: "Auto Disabled",
+    // podStatus: "Auto Disabled",
     levGaps: { first: 0, second: 0, third: 0, fourth: 0 },
     progressFraction: 0,
   });
@@ -70,7 +70,7 @@ export function useSensorDataWithTracking() {
         if (!response.ok) throw new Error("Network response was not ok");
         const sensorData = await response.json();
 
-        console.log("Fetched sensor data:", sensorData);
+        // console.log("Fetched sensor data:", sensorData);
 
         const now = Date.now();
         const elapsedSeconds = (now - lastUpdateTimeRef.current) / 1000;
@@ -90,19 +90,19 @@ export function useSensorDataWithTracking() {
         lastSpeedRef.current = speed;
 
         let runtime = runtimeRef.current;
-        let podStatus = "Auto Disabled";
+        // let podStatus = "Auto Disabled";
         if (speed > 0.1) {
           runtime += elapsedSeconds;
-          podStatus = "Levitating";
+          // podStatus = "Levitating";
         } else {
-          podStatus = "Auto Disabled";
+          // podStatus = "Auto Disabled";
         }
 
         if (speed < 0.1) {
           if (!zeroSpeedStartTimeRef.current) {
             zeroSpeedStartTimeRef.current = now;
           } else if (now - zeroSpeedStartTimeRef.current > 20000 && !autoDisabledRef.current) {
-            podStatus = "Auto Disabled (Zero Speed)";
+            // podStatus = "Auto Disabled (Zero Speed)";
             autoDisabledRef.current = true;
             runtime = 0;
           }
@@ -135,7 +135,7 @@ export function useSensorDataWithTracking() {
           acceleration,
           distance,
           runtime: Math.floor(runtime),
-          podStatus,
+          // podStatus,
           levGaps,
           progressFraction,
         });

@@ -53,9 +53,59 @@ export function GaugeSVG({
     );
 }
 
+export function ActionButton({ label, onClick, disabled, active, color = "#454242ff" }) {
+  const outerButtonStyle = {
+    width: "100%", // Controlled by parent container
+    height: "65px",
+    borderRadius: "999px",
+    border: `${color} 4px solid`,
+    background: "#ffffff",
+    position: "relative",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: disabled ? "not-allowed" : "pointer",
+    boxShadow: "0 6px 20px rgba(0, 0, 0, 0.15)",
+    transition: "all 0.2s ease",
+    opacity: disabled ? 0.6 : 1,
+  };
+
+  const innerCircleStyle = {
+    position: "absolute",
+    // Inset more when "active" (e.g., battery is enabled)
+    top: active ? "10px" : "6px",
+    left: active ? "10px" : "6px",
+    right: active ? "10px" : "6px",
+    bottom: active ? "10px" : "6px",
+    borderRadius: "999px",
+    background: active ? "#f0f0f0" : "#ffffff",
+    boxShadow: active 
+        ? "inset 0 4px 8px rgba(0,0,0,0.15)" 
+        : "inset 0 2px 4px rgba(0,0,0,0.05)",
+    transition: "all 0.2s ease",
+  };
+
+  return (
+    <button 
+      style={outerButtonStyle} 
+      onClick={!disabled ? onClick : undefined}
+      disabled={disabled}
+    >
+      <div style={innerCircleStyle} />
+      <span style={{ position: "relative", zIndex: 10, fontWeight: 600 }}>
+        {label}
+      </span>
+    </button>
+  );
+}
+
 export function LevitationGaps({ gaps }) {
     const gapNames = ["first", "second", "third", "fourth"];
     return (
+        <>
+        <div style={{display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "10px"}} className='levitation-gaps'>
+            <span className='levitation-gaps-title'>Levitation Gaps</span>
+        </div>
         <div className='lev-gaps-container'>
             {gapNames.map((name) => {
                 const gapValue = gaps[name];
@@ -67,7 +117,7 @@ export function LevitationGaps({ gaps }) {
                             display: "flex",
                             flexDirection: "column",
                             alignItems: "center",
-                            gap: "6px",
+                            gap: "8px",
                         }}
                     >
                         <div className='lev-gap-label'>
@@ -78,12 +128,13 @@ export function LevitationGaps({ gaps }) {
                             <span className='corner top-right'></span>
                             <span className='corner bottom-left'></span>
                             <span className='corner bottom-right'></span>
-                            <span className='icon-content'>{gaps[name].toFixed(2)}</span>
+                            <span className='icon-content'>{gaps[name].toFixed(2)}mm</span>
                         </div>
                     </div>
                 );
             })}
         </div>
+        </>
     );
 }
 
@@ -134,6 +185,78 @@ export default function DashboardOverlay({
     const currentStatus = getStatus('current', sensorData.current);
     const speedStatus = getStatus('speed', sensorData.speed)
     const gapStatus = getStatus('gap', sensorData.gap)
+
+    const [runPhase, setRunPhase] = useState("IDLE");
+    const [hasStartedMoving, setHasStartedMoving] = useState(false);
+    const [podStatus, setPodStatus] = useState("Auto Disabled");
+
+    useEffect(() => {
+        setRunPhase("IDLE"); //IDLE, COMMANDED, LAUNCHING,RUNNING, STOPPING
+        setHasStartedMoving(false);
+    }, [dashboardMode]);
+
+    const isBatteryEnabled = sensorData.voltage > 0;
+    
+    const avgGap = Object.values(sensorData.levGaps).reduce((a, b) => a + b, 0) / 4;
+    const isLevitating = avgGap > 0;
+
+    useEffect(() => {
+        if (runPhase === "LAUNCHING" && sensorData.speed !== 0 && !hasStartedMoving) {
+            setHasStartedMoving(true);
+            setRunPhase("RUNNING");
+        }
+
+        if (runPhase === "STOPPING") {
+            setPodStatus("Stopping");
+        } else if (runPhase === "RUNNING") {
+            setPodStatus("Running");
+        } else if (runPhase === "LAUNCHING") {
+            setPodStatus("Launching");
+        } else if (dashboardMode === "propulsion") {
+            setPodStatus(isBatteryEnabled ? "Battery On" : runPhase === "COMMANDED" ? "Enabling Battery" : "Auto Disabled");
+        } else {
+            setPodStatus(isLevitating ? "Levitating" : runPhase === "COMMANDED" ? "Enabling Levitation" : "Auto Disabled");
+        }
+    }, [sensorData.speed, isBatteryEnabled, isLevitating, runPhase, dashboardMode, hasStartedMoving]);
+
+    const isPodActive = ["Launching", "Running", "Stopping"].includes(runPhase);
+
+    let actionButtonProps = {
+        label: dashboardMode === "propulsion" 
+            ? (isBatteryEnabled ? "BATTERY ENABLED" : "ENABLE BATTERY")
+            : (isLevitating ? "LEVITATING" : "LEVITATE"),
+        active: dashboardMode === "propulsion" ? isBatteryEnabled : isLevitating,
+        disabled: isBatteryEnabled || isLevitating || isPodActive,
+        onClick: () => {
+            console.log("Battery Enable/Levitation Commanded");
+            setRunPhase("COMMANDED");
+        }
+    };
+
+    let launchButtonProps = {};
+
+    if (runPhase === "RUNNING" || runPhase === "LAUNCHING" || runPhase === "STOPPING") {
+        launchButtonProps = {
+            label: "EMERGENCY STOP",
+            disabled: runPhase === "STOPPING",
+            color: "#e74c3c",
+            onClick: () => {
+                console.log("Emergency Stop Commanded");
+                setRunPhase("STOPPING");
+            }
+        };
+    } else {
+        const canLaunch = dashboardMode === "propulsion" ? isBatteryEnabled : isLevitating;
+        launchButtonProps = {
+            label: "LAUNCH",
+            disabled: !canLaunch,
+            color: !canLaunch ? "#454242ff" : "#2ecc71",
+            onClick: () => {
+                console.log("Launch Commanded");
+                setRunPhase("LAUNCHING");
+            }
+        };
+    }
 
     const fetchWeather = async () => {
         try {
@@ -220,12 +343,34 @@ export default function DashboardOverlay({
                     style={{ width: `${sensorData.progressFraction * 100}%` }}
                 ></div>
                 </div>
+                <div className="launch-button-container" style={{
+                    display: "flex",
+                    marginTop: "30px",
+                    gap: "15px",
+                    width: "450px",
+                    height: "100%",
+                    alignItems: "center",
+                }}>
+                    <ActionButton
+                        label={actionButtonProps.label}
+                        active={actionButtonProps.active}
+                        disabled={actionButtonProps.disabled}
+                        onClick={actionButtonProps.onClick}
+                    />
+
+                    <ActionButton
+                        label={launchButtonProps.label}
+                        disabled={launchButtonProps.disabled}
+                        color={launchButtonProps.color}
+                        onClick={launchButtonProps.onClick}
+                    />
+                </div>
             </div>
 
             <div className="bottom-right-panel">
                 <div className="status-display">
                 <span className="status-label">Pod Status:</span>
-                <span className="status-value">{sensorData.podStatus}</span>
+                <span className="status-value">{podStatus}</span>
                 <span className="status-indicator"></span>
                 </div>
                 <div className="runtime-display">
